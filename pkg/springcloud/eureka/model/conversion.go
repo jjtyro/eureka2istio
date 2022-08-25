@@ -43,6 +43,14 @@ const (
 
 var labelRegexp *regexp.Regexp
 
+var namespace string
+var domain string
+
+func SetNamespaceDomain(ns string, dom string) {
+	namespace = ns
+	domain = dom
+}
+
 func init() {
 	labelRegexp = regexp.MustCompile("^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$")
 }
@@ -50,6 +58,8 @@ func init() {
 // ConvertServiceEntry converts eureka app instance to a service entry
 func ConvertServiceEntry(eurekaName, service string, eurekaInstances []eureka.Instance) (map[string]*v1alpha3.ServiceEntry, error) {
 	serviceEntries := make(map[string]*v1alpha3.ServiceEntry)
+
+	host := service + "." + namespace + domain
 
 	for _, provider := range eurekaInstances {
 		eurekaAttributes := parseProvider(provider)
@@ -61,7 +71,7 @@ func ConvertServiceEntry(eurekaName, service string, eurekaInstances []eureka.In
 				"host, ip or port is missing: %v", provider)
 		}
 
-		host := constructIGV(eurekaAttributes)
+		//host := constructIGV(eurekaAttributes)
 
 		if host == "" {
 			log.Warn("host is nil")
@@ -73,7 +83,7 @@ func ConvertServiceEntry(eurekaName, service string, eurekaInstances []eureka.In
 			continue
 		}
 
-		ns := "istio-system"
+		ns := namespace
 		// All the providers of a spring cloud eureka service should be deployed in the same namespace
 		if se, exist := serviceEntries[host]; exist {
 			if ns != se.Namespace {
@@ -108,7 +118,7 @@ func ConvertServiceEntry(eurekaName, service string, eurekaInstances []eureka.In
 		labels[eurekaNameLabel] = eurekaName
 		serviceEntry, exist := serviceEntries[host]
 		if !exist {
-			serviceEntry = createServiceEntry(ns, host, eurekaApp)
+			serviceEntry = createServiceEntry(ns, host, eurekaApp, service)
 			serviceEntries[host] = serviceEntry
 		}
 		serviceEntry.Spec.Endpoints = append(serviceEntry.Spec.Endpoints,
@@ -130,7 +140,7 @@ func constructIGV(attributes map[string]string) string {
 	return ""
 }
 
-func createServiceEntry(namespace string, host string, eurekaApp string) *v1alpha3.ServiceEntry {
+func createServiceEntry(namespace string, host string, eurekaApp string, service string) *v1alpha3.ServiceEntry {
 	spec := &istio.ServiceEntry{
 		Hosts:      []string{host},
 		Ports:      []*istio.Port{convertPort()},
@@ -141,7 +151,7 @@ func createServiceEntry(namespace string, host string, eurekaApp string) *v1alph
 
 	serviceEntry := &v1alpha3.ServiceEntry{
 		ObjectMeta: v1.ObjectMeta{
-			Name:      ConstructServiceEntryName(host),
+			Name:      ConstructServiceEntryName(service),
 			Namespace: namespace,
 			Labels: map[string]string{
 				"manager":  asmFieldManager,
@@ -192,11 +202,15 @@ func parseProvider(provider eureka.Instance) map[string]string {
 		eurekaAttributes["asm-hostname"] = (provider.Metadata["asm-serviceentry"]).(string)
 	}
 
+	for k, v := range provider.Metadata {
+		eurekaAttributes[k] = v.(string)
+	}
+
 	return eurekaAttributes
 }
 
 // ConstructServiceEntryName constructs the service entry name for a given spring cloud eureka service
 func ConstructServiceEntryName(service string) string {
 	validDNSName := strings.ReplaceAll(strings.ToLower(service), ".", "-")
-	return asmFieldManager + "-" + validDNSName
+	return validDNSName
 }

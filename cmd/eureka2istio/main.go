@@ -16,6 +16,7 @@ package main
 
 import (
 	"flag"
+	"github.com/aeraki-framework/eureka2istio/pkg/springcloud/eureka/model"
 	watcher "github.com/aeraki-framework/eureka2istio/pkg/springcloud/eureka/watcher"
 	eureka "github.com/huanghuangzym/eureka-client"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
@@ -30,14 +31,24 @@ import (
 const (
 	defaultEurekaAddr = "http://10.244.0.16:8761/eureka/,http://10.244.0.17:8761/eureka/"
 	defaultEurekaMode = "simple"
+	defaultNamespace = "istio-system"
+	defaultDomain    = "..svc.cluster.local"
 )
+
+
 
 func main() {
 	var ekAddr string
 	var mode string
+	var namespace string
+	var domain string
 	flag.StringVar(&ekAddr, "ekaddr", defaultEurekaAddr, "eureka address")
 	flag.StringVar(&mode, "mode", defaultEurekaMode, "eureka mode")
+	flag.StringVar(&namespace, "namespace", defaultNamespace, "k8s Namespace")
+	flag.StringVar(&domain, "domain", defaultDomain, "hostname Domain")
 	flag.Parse()
+
+	model.SetNamespaceDomain(namespace, domain)
 
 	hosts := strings.Split(ekAddr, ",")
 	if len(hosts) == 0 || hosts[0] == "" {
